@@ -1,14 +1,13 @@
 import numpy as np
 import matplotlib.pyplot as plt
 import tensorflow as tf
-import tf.contrib.keras as keras
 
 image_size = 16
-nFC = 5
-size1 = 8
-step_size = 1e-3
+nFC = 1
+size1 = 16
+step_size = 1e-1
 batch_size = 500
-n_train_step = 300
+n_train_step = 1000
 encoder_dim = 2
 
 def image_batch(size, random=True):
@@ -30,24 +29,29 @@ def image_batch(size, random=True):
     img[:,:,:,0] = ( np.dot( n, coord_mat )*np.sqrt(2) / (L-1) + 1 ) / 2*255
     return [theta, img]
 
-def upsampling2d(input, size):
-    mat_left = np.zeros( (input.shape[1]*size[0], input.shape[2]) )
-    mat_right = np.zeros( (input.shape[2], input.shape[1]*size[1]) )
-    for i in range(input.shape[1]):
-        for j in range(input.shape[2]):
-            mat_left[i*size[0]:(i+1)+size[0], j] = np.ones(size[0])
-            mat_right[i, j*size[0]:(j+1)+size[1]]
+def upsampling2d(in_layer, size):
+    in_shape = in_layer.shape.as_list()
+    #a = np.ones(size, dtype=np.float32)
+    a = np.zeros((size[0], size[1], in_shape[3], in_shape[3]), dtype=np.float32)
+    for i in range(in_shape[3]):
+        a[:,:,i,i] = np.ones(size)
+    a = tf.constant(a)
+    output_shape = (batch_size, in_shape[1]*size[0], \
+                                 in_shape[2]*size[1], in_shape[3])
+    strides = (1, size[0], size[1], 1)
+    return tf.nn.conv2d_transpose(in_layer, a, output_shape, strides)
 
 def weight_variable(shape):
-  initial = tf.truncated_normal(shape, stddev=0.1)
-  return tf.Variable(initial)
+    initial = tf.truncated_normal(shape, stddev=0.1)
+    return tf.Variable(initial)
+
 def bias_variable(shape):
-  initial = tf.constant(0.1, shape=shape)
-  return tf.Variable(initial)
+    initial = tf.constant(0.1, shape=shape)
+    return tf.Variable(initial)
 
 sess = tf.InteractiveSession()
-img = tf.placeholder(tf.float32, shape=[None, image_size, image_size, 1])
-theta = tf.placeholder(tf.float32, shape=[None, encoder_dim])
+img = tf.placeholder(tf.float32, shape=[batch_size, image_size, image_size, 1])
+theta = tf.placeholder(tf.float32, shape=[batch_size, encoder_dim])
 
 ###########
 # decoder #
@@ -66,35 +70,36 @@ for i in range(1, nFC):
     b_fcN[i] = bias_variable([size1])
     h_fcN[i] = tf.nn.relu(tf.matmul(h_fcN[i-1], W_fcN[i]) + b_fcN[i])
 
-W_fc1 = weight_variable([size1, encoder_dim])
-b_fc1 = bias_variable([encoder_dim])
+W_fc1 = weight_variable([size1, 64*2*2])
+b_fc1 = bias_variable([64*2*2])
 h_fc1 = tf.matmul(h_fcN[nFC-1], W_fc1) + b_fc1
-h_upsamp = keras.UpSampling2D
+h_mat1 = tf.reshape(h_fc1, (-1, 2, 2, 64))
 
-W_conv1 = weight_variable([3, 3, 1, 16])
+
+h_upsamp1 = upsampling2d(h_mat1, (2, 2))
+W_conv1 = weight_variable([3, 3, 64, 16])
 b_conv1 = bias_variable([16])
-h_conv1 = tf.nn.relu(tf.nn.conv2d(img, W_conv1, strides=[1,1,1,1], \
+h_conv1 = tf.nn.relu(tf.nn.conv2d(h_upsamp1, W_conv1, strides=[1,1,1,1], \
     padding='SAME') + b_conv1)
-h_pool1 = tf.nn.max_pool(h_conv1, ksize=[1,2,2,1], \
-    strides=[1,2,2,1], padding='SAME')
 
-W_conv2 = weight_variable([3, 3, 16, 32])
-b_conv2 = bias_variable([32])
-h_conv2 = tf.nn.relu(tf.nn.conv2d(h_pool1, W_conv2, strides=[1,1,1,1], \
+h_upsamp2 = upsampling2d(h_conv1, (2,2))
+W_conv2 = weight_variable([3, 3, 16, 4])
+b_conv2 = bias_variable([4])
+h_conv2 = tf.nn.relu(tf.nn.conv2d(h_upsamp2, W_conv2, strides=[1,1,1,1], \
     padding='SAME') + b_conv2)
-h_pool2 = tf.nn.max_pool(h_conv2, ksize=[1,2,2,1], \
-    strides=[1,2,2,1], padding='SAME')
 
-h_flat = tf.reshape(h_pool2, [-1, 32*4*4])
-
-
+h_upsamp3 = upsampling2d(h_conv2, (2,2))
+W_conv3 = weight_variable([3, 3, 4, 1])
+b_conv3 = bias_variable([1])
+decoded = tf.nn.relu(tf.nn.conv2d(h_upsamp3, W_conv3, strides=[1,1,1,1], \
+    padding='SAME') + b_conv3)
 
 
 ###########################
 # training and evaluation #
 ###########################
 
-loss = tf.losses.mean_squared_error(encoded, theta)
+loss = tf.losses.mean_squared_error(decoded, img)
 train_step = tf.train.AdamOptimizer(step_size).minimize(loss)
 sess.run(tf.global_variables_initializer())
 
@@ -106,7 +111,7 @@ ax = fig.add_subplot(111)
 #plt.ylim([0, 10000])
 #ax.set_yscale('log')
 ax.set_xlim([0, n_train_step])
-ax.set_ylim([1e-5, 1e2])
+ax.set_ylim([1e-2, 1e6])
 ax.set_yscale('log')
 lossplt, = ax.plot([], [], 'b-')
 
@@ -127,6 +132,8 @@ for i in range(n_train_step):
     lossplt.set_ydata(losstrack)
     fig.canvas.draw()
 
+
+'''
 theta_, batch = image_batch(batch_size, random=False)
 theta_sin_cos = np.empty((batch_size, 2))
 theta_sin_cos[:,0] = np.sin(theta_[:,0])
@@ -138,3 +145,4 @@ ax2 = fig.add_subplot(222)
 ax2.plot(theta_, output_[:,0])
 ax2.plot(theta_, output_[:,1])
 plt.show()
+'''
