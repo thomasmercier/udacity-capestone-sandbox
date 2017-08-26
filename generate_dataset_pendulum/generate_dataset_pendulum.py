@@ -70,7 +70,7 @@ def make_image(theta):
     draw.ellipse((x-R, y-R, x+R, y+R), fill=255)
     draw.line( (w, h, x, y), fill=255, width=l_width )
     del draw
-    return img
+    return np.array(img)
 
 u = input()
 x = simulate(u)
