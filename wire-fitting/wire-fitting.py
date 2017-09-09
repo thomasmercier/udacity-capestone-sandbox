@@ -4,11 +4,11 @@ import numpy as np
 import matplotlib.pyplot as plt
 
 
-nFC = 30
-size1 = 10
-size2 = 10
-step_size = 1e-3
-n_train_step = 100
+nFC = 20
+size1 = 5
+size2 = 5
+step_size = 1e-4
+n_train_step = 10000
 batch_size = 1000
 
 
@@ -39,11 +39,11 @@ h_fcN[0] = tf.matmul(x, W_fcN[0]) + b_fcN[0]
 for i in range(1, nFC):
     W_fcN[i] = weight_variable([size1, size1])
     b_fcN[i] = bias_variable([size1])
-    h_fcN[i] = tf.nn.sigmoid(tf.matmul(h_fcN[i-1], W_fcN[i]) + b_fcN[i])
+    h_fcN[i] = tf.nn.tanh(tf.matmul(h_fcN[i-1], W_fcN[i]) + b_fcN[i])
 
 W_fc1 = weight_variable([size1, 2*size2])
 b_fc1 = bias_variable([2*size2])
-h_fc1 = tf.nn.sigmoid(tf.matmul(h_fcN[nFC-1], W_fc1) + b_fc1)
+h_fc1 = tf.nn.tanh(tf.matmul(h_fcN[nFC-1], W_fc1) + b_fc1)
 
 yi, ui = tf.split(h_fc1, [size2, size2], 1)
 
@@ -78,7 +78,7 @@ for i in range(1):
     fxu_ = estimate.eval(feed_dict={x: x_, u: u_})
     ui_ = ui.eval(feed_dict={x: x_, u: u_})
     yi_ = yi.eval(feed_dict={x: x_, u: u_})
-    ax.scatter(x_[:,0], ui_[:,0], yi_[:,0], 'g.')
+    #ax.scatter(x_[:,0], ui_[:,0], yi_[:,0], 'g.')
     ax.scatter(x_[:,0], u_[:,0], fxu_[:,0], 'r.')
     ax.scatter(x_[:,0], u_[:,0], f(x_,u_)[:,0], 'b.')
 

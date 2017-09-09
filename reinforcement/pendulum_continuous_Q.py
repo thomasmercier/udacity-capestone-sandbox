@@ -19,12 +19,6 @@ def f(x, u):
     res1 = ( u - w0/Q*x[1] - w0**2*np.sin(x[0]) ) / I
     return np.array([x[1], res1])
 
-def u(x):
-    E = 0.5*I*x[1]**2 - m*g*L*np.cos(x[0])
-    dW = E - m*g*L
-    print(dW)
-    return -np.sign(dW) * np.sign(x[1]) * uMax;
-
 x = np.empty([N, 2])
 x[0,0] = x0
 x[0,1] = v0
